@@ -1,0 +1,6 @@
+# To ensure app dependencies are ported from your virtual environment/host machine into your container, run 'pip freeze > requirements.txt' in the terminal to overwrite this file
+argparse==1.4.0
+tensorflow==2.8.0
+tensorflow-datasets==4.2.0
+confluent-kafka==1.8.2
+cryptography==37.0.1
