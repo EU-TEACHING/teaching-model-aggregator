@@ -17,7 +17,8 @@ ENV DA_LOGFILE="FederatedServer.log"
 ENV DA_CLIENT_MODEL_PREFIX="client_model"
 ENV DA_CLIENT_MODEL_EXT="h5"
 ENV DA_AGGR_MODEL="aggregate_model_tmp.h5"
-
+# crypto disabled now
+ENV DA_CRYPT_SELECT="plaintext"
 
 # Install pip requirements
 COPY requirements.txt .

@@ -293,6 +293,7 @@ def main():
     da_client_model_prefix = os.environ.get('DA_CLIENT_MODEL_PREFIX')
     da_client_model_ext = os.environ.get('DA_CLIENT_MODEL_EXT')
     da_aggr_model = os.environ.get('DA_AGGR_MODEL')
+    da_crypt_select = os.environ.get('DA_CRYPT_SELECT')
 
     # fed_server = FederatedServer(testmode=ARGUMENTS.testmode,
     #                              num_msg=ARGUMENTS.n_models,
@@ -313,7 +314,7 @@ def main():
                                  client_model_prefix=da_client_model_prefix,
                                  broker_addr=da_broker,
                                  groupid=da_groupid,
-                                 cryptselect=ARGUMENTS.crypt_select,
+                                 cryptselect=da_crypt_select,
                                  crypt_passwords=ARGUMENTS.crypt_aes_passwords,
                                  crypt_salts=ARGUMENTS.crypt_aes_salts
     )

@@ -14,7 +14,7 @@ See within FederatedServer.py main function.
 Assuming all the github folder was downloaded. 
 The following creates an image named TEACHING
 
-`docker build -t teaching_aggregator DataAggregator-master/`
+`docker build -t teaching_aggregator teaching-model-aggregator-master/`
 
 ## How to launch - example
 Example of how to run the image, overriding the DA_BROKER env variable
