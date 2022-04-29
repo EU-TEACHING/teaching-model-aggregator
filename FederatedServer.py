@@ -15,7 +15,7 @@ Current implementation :
  * aggregates after receiving a prefixed number of models
  * recomputes and validates the model often to ease debug
  * does not yet send the model upward
- * computes the aggregation by weigth average on all model weights
+ * computes the aggregation by weight average on all model weights
 
 Future work
  * TODO split h5 model work to a separate class
@@ -33,7 +33,7 @@ import argparse
 
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import padding
-from cryptography.hazmat.primitives.ciphers import (Cipher, algorithms, modes)
+from cryptography.hazmat.primitives.ciphers import (Cipher, aead, algorithms, modes)
 
 from confluent_kafka import Consumer, Producer
 from confluent_kafka import KafkaError, KafkaException
@@ -47,7 +47,8 @@ ARGUMENTS = None
 
 class FederatedServer(object):
 
-    def __init__(self, num_msg, testmode, aggrfilename, client_model_prefix, client_model_ext, broker_addr, groupid, cryptselect, crypt_passwords, crypt_salts):
+    def __init__(self, num_msg, testmode, aggrfilename, client_model_prefix, client_model_ext,
+                 broker_addr, groupid, cryptselect, crypt_passwords, crypt_salts):
         self.receiver = None
         self.producer = None
 
@@ -67,12 +68,12 @@ class FederatedServer(object):
         self.client_model_ext = client_model_ext
 
         # encryption parameters
-        self.crypt_aes_passwords=crypt_passwords
-        self.crypt_aes_salts=crypt_salts
-        self.crypt_select=cryptselect
+        self.crypt_aes_passwords = crypt_passwords
+        self.crypt_aes_salts = crypt_salts
+        self.crypt_select = cryptselect
         # choosen cipher support. Setting cipher==None skips both encryption and decryption
-        self.cipher=None
-        self.padder=None
+        self.cipher = None
+        self.padder = None
 
         self.init_communication(broker_addr, groupid)
         self.init_encryption()
@@ -94,18 +95,21 @@ class FederatedServer(object):
 
     # TODO no encryption salt support yet
     def init_encryption(self):
-        if (self.crypt_select == "AES"):
+        if self.crypt_select == "AES":
             # perform init
             # TODO check that this init is actually allowed to just run once, some crypto module need a reinit each time
             backend = default_backend()
-            self.cipher = Cipher(algorithms.AES(self.crypt_aes_passwords['testSender']), modes.CFB(self.crypt_aes_salts['testSender']), backend=backend)
-            self.padder = padding.PKCS7(256).padder() # 256 bit   and salt is 8 bytes
-            #TODO we need to use Galois counter mode  as in Java stronger()  --- is in the modes parameter
+            self.cipher = Cipher(algorithms.aead.AES((self.crypt_aes_passwords['testSender']),
+                                 modes.CFB(self.crypt_aes_salts['testSender']),
+                                 backend=backend))
+            self.padder = padding.PKCS7(256).padder()   # 256 bit   and salt is 8 bytes
+            # we need to use Galois counter mode  as in Java stronger()
         else:
-            self.cypher=None
+            # in case we may want to disable the cypher dynamically
+            self.cypher = None
 
     def message_encrypt(self, msg):
-        if (self.cipher):
+        if self.cipher:
             pad_msg = self.padder.update(msg) + self.padder.finalize()
             encryptor = self.cipher.encryptor()
             encrypted = encryptor.update(pad_msg) + encryptor.finalize()
@@ -114,12 +118,12 @@ class FederatedServer(object):
         return encrypted
 
     def message_decrypt(self, emsg):
-        if (self.cypher):
+        if self.cypher:
             pad_emsg = self.padder.update(emsg) + self.padder.finalize()
             decryptor = self.cipher.decryptor()
-            decrypted = decryptor.update(emsg) + decryptor.finalize()
+            decrypted = decryptor.update(pad_emsg) + decryptor.finalize()
         else:
-            decrypted=emsg
+            decrypted = emsg
         return decrypted
 
     # method to compute models that we will use to send around or as a reference when loading weights
@@ -167,7 +171,7 @@ class FederatedServer(object):
     def msg_process(self, msg):
         if len(self.local_store) < self.NUM_MSGS:
 
-            print ("Message received", msg.value())
+            print("Message received", msg.value())
 
             # decrypt the message if a cypher was installed
             msg_d_value = self.message_decrypt(msg.value())
@@ -221,7 +225,7 @@ class FederatedServer(object):
             while self.receiver_running:
                 msg = self.receiver.poll(msg_timeout)
 
-                #print("Message received")
+                # print("Message received")
 
                 if msg is None:
                     continue
@@ -266,7 +270,7 @@ def argparsing():
                         help='Filename extension of the client model')
     parser.add_argument('--aggr-model', action='store', default='aggregate_model_tmp.h5',
                         help='Filename of the aggregate model')
-    parser.add_argument('--crypt-aes-passwords', action='store', default={"testSender" : "NULLPWD"},
+    parser.add_argument('--crypt-aes-passwords', action='store', default={"testSender": "NULLPWD"},
                         help='Dictionary of {FileId:password} used for crypto')
     parser.add_argument('--crypt-aes-salts', action='store', default={"testSender": ""},
                         help='Dictionary of {FileId:salt} used for crypto')
@@ -317,8 +321,7 @@ def main():
                                  cryptselect=da_crypt_select,
                                  crypt_passwords=ARGUMENTS.crypt_aes_passwords,
                                  crypt_salts=ARGUMENTS.crypt_aes_salts
-    )
-
+                                 )
 
     # fed_server.main_loop(msg_timeout=ARGUMENTS.msg_timeout)
     fed_server.main_loop(msg_timeout=da_msg_timeout)
