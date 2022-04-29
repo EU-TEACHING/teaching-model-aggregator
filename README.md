@@ -16,6 +16,12 @@ The following creates an image named TEACHING
 
 `docker build -t teaching_aggregator teaching-model-aggregator-master/`
 
+## Hacks
+How to install tensorflow on the J Nano
+https://pulsebit.wordpress.com/2021/06/03/installing-tensorflow-on-jetson-nano/
+
+https://forums.developer.nvidia.com/t/official-tensorflow-for-jetson-nano/71770
+
 ## How to launch - example
 Example of how to run the image, overriding the DA_BROKER env variable
 
