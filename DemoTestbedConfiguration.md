@@ -19,8 +19,7 @@ we need to check that the results of the aggregation return back successfully to
 crypto will be an issue IMO
 
 ### commands at CNR
-cd ~
-cd teaching-model-aggregator
+cd ~/teaching-model-aggregator
 
 ## at HUA 
 reconfigure the JNano on new address

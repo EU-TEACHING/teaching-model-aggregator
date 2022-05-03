@@ -222,6 +222,11 @@ class FederatedServer(object):
     def main_loop(self, msg_timeout):
         try:
             self.receiver.subscribe([KafkaTopics.CLIENT_MODEL_TOPIC])
+
+            # TODO in case we need an initial handshake with clients it should be likely coded here, e.g.
+            # 1) gather client ip / names
+            # 2) send each client some init message to solicit first model
+
             while self.receiver_running:
                 msg = self.receiver.poll(msg_timeout)
 
