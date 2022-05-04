@@ -20,6 +20,9 @@ ENV DA_AGGR_MODEL="aggregate_model_tmp.h5"
 # crypto disabled now
 ENV DA_CRYPT_SELECT="plaintext"
 
+ENV DA_UPWARD_PATH="/shared_storage/uploads"
+ENV DA_DOWNWARD_PATH="/shared_storage/downloads"
+
 # Install pip requirements
 COPY requirements.txt .
 RUN python -m pip install -r requirements.txt

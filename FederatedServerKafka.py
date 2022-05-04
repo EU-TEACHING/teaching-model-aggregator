@@ -292,7 +292,6 @@ def main():
     ARGUMENTS = argparsing()
     logging.basicConfig(filename=ARGUMENTS.logfile,
                         level=logging.INFO)
-
     da_broker = os.environ.get('DA_BROKER')
     da_groupid = os.environ.get('DA_GROUPID')
     da_n_models = os.environ.get('DA_N_MODELS')

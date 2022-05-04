@@ -28,27 +28,95 @@ import os
 
 from pathlib import Path
 import logging
-import socket
+# import socket
 import argparse
 
-from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives import padding
-from cryptography.hazmat.primitives.ciphers import (Cipher, aead, algorithms, modes)
-
-from confluent_kafka import Consumer, Producer
-from confluent_kafka import KafkaError, KafkaException
+# from confluent_kafka import Consumer, Producer
+# from confluent_kafka import KafkaError, KafkaException
 from tensorflow import keras
 
-from teaching_comm import KafkaTopics, KafkaConfig, create_teaching_model_structure, compile_teaching_model, \
+# from teaching_comm import KafkaTopics, KafkaConfig, create_teaching_model_structure, compile_teaching_model, \
+#    evaluate_teaching_model, write_modelfile, read_modelfile, model_weight_ensemble
+
+from teaching_comm import create_teaching_model_structure, compile_teaching_model, \
     evaluate_teaching_model, write_modelfile, read_modelfile, model_weight_ensemble
 
+# manage watching files...
+import time
+from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler
+
 ARGUMENTS = None
+
+
+# derived from pypi example
+class FileWatchLoop:
+
+    def __init__(self, directory, fedserver):
+        self.observer = Observer()
+        # Set the directory on watch
+        self.watchDirectory = directory
+        # Federated Server object, will process the received data
+        self.FedServer = fedserver
+
+    def run(self):
+        event_handler = Handler(self.FedServer)
+        self.observer.schedule(event_handler, self.watchDirectory, recursive=True)
+        self.observer.start()
+        try:
+            while True:
+                time.sleep(5)
+        except KeyboardInterrupt:
+            #  revise the exception clause here
+            self.observer.stop()
+            # TODO add proper logging to file
+            print("Observer Stopped")
+
+        self.observer.join()
+
+
+# this object class handles actual event dispatching and selection
+# will forward file creation events to the FederatedServer
+class Handler(FileSystemEventHandler):
+
+    def __init__(self, fedserver):
+        # we forward the important events to the FedServer code
+        self.FedServer = fedserver
+        # Set the patterns for PatternMatchingEventHandler
+        # watchdog.events.PatternMatchingEventHandler.__init__(self, patterns=['*.csv'],
+        #                                                     ignore_directories=True, case_sensitive=False)
+
+    # TODO remove below commented method
+    # i try removing this, apparently it is not mandatory but just an optimization
+    # @staticmethod
+    # def on_any_event(event):
+    #     if event.is_directory:
+    #         return None
+    #     elif event.event_type == 'modified':
+    #         # we do not plan to receive modifications
+    #         # print("Watchdog received modified event - % s." % event.src_path)
+    #         return None
+    #     elif event.event_type == 'created':
+    #         # Event is created, you can process it now
+    #         # TODO call federated server receive model
+    #         print("Watchdog received created event - % s." % event.src_path)
+    #         self.FedServer()
+
+    def on_created(self, event):
+        # TODO call federated server receive model
+        averaged = self.FedServer.process_model(event.src_path)
+        print("Watchdog received created event - % s." % event.src_path)
+        if averaged:
+            averaged.save_weights(self.FedServer.aggregate_filename)
+            self.FedServer.federated_model_resend()
 
 
 class FederatedServer(object):
 
     def __init__(self, num_msg, testmode, aggrfilename, client_model_prefix, client_model_ext,
-                 broker_addr, groupid, cryptselect, crypt_passwords, crypt_salts):
+                 broker_addr, groupid, outgoing_path):
+        # no incoming_path as it is handled by the FileWatchLoop class
+        # , cryptselect, crypt_passwords, crypt_salts):
         self.receiver = None
         self.producer = None
 
@@ -67,64 +135,14 @@ class FederatedServer(object):
         self.client_model_prefix = client_model_prefix
         self.client_model_ext = client_model_ext
 
-        # encryption parameters
-        self.crypt_aes_passwords = crypt_passwords
-        self.crypt_aes_salts = crypt_salts
-        self.crypt_select = cryptselect
-        # choosen cipher support. Setting cipher==None skips both encryption and decryption
-        self.cipher = None
-        self.padder = None
+        # hack for the second integration demo, it will contain the last seen Sender ID, used in asnwering back
+        self.SenderId = "X"
 
-        self.init_communication(broker_addr, groupid)
-        self.init_encryption()
+        # self.init_communication(broker_addr, groupid)
         self.init_local_models()
 
-    def init_communication(self, broker_addr, groupid):
-        # Configure receiver
-        conf_receiver = {'bootstrap.servers': broker_addr,
-                         'group.id': groupid,
-                         'auto.offset.reset': 'smallest'}
-
-        # Configure producer
-        conf_producer = {'bootstrap.servers': broker_addr,
-                         'client.id': socket.gethostname()}
-
-        # Instantiate producer and receiver
-        self.producer = Producer(conf_producer)
-        self.receiver = Consumer(conf_receiver)
-
-    # TODO no encryption salt support yet
-    def init_encryption(self):
-        if self.crypt_select == "AES":
-            # perform init
-            # TODO check that this init is actually allowed to just run once, some crypto module need a reinit each time
-            backend = default_backend()
-            self.cipher = Cipher(algorithms.aead.AES((self.crypt_aes_passwords['testSender']),
-                                 modes.CFB(self.crypt_aes_salts['testSender']),
-                                 backend=backend))
-            self.padder = padding.PKCS7(256).padder()   # 256 bit   and salt is 8 bytes
-            # we need to use Galois counter mode  as in Java stronger()
-        else:
-            # in case we may want to disable the cypher dynamically
-            self.cypher = None
-
-    def message_encrypt(self, msg):
-        if self.cipher:
-            pad_msg = self.padder.update(msg) + self.padder.finalize()
-            encryptor = self.cipher.encryptor()
-            encrypted = encryptor.update(pad_msg) + encryptor.finalize()
-        else:
-            encrypted = msg
-        return encrypted
-
-    def message_decrypt(self, emsg):
-        if self.cypher:
-            pad_emsg = self.padder.update(emsg) + self.padder.finalize()
-            decryptor = self.cipher.decryptor()
-            decrypted = decryptor.update(pad_emsg) + decryptor.finalize()
-        else:
-            decrypted = emsg
-        return decrypted
+        # self.incoming_path = incomingpath
+        self.outgoing_path = outgoing_path
 
     # method to compute models that we will use to send around or as a reference when loading weights
     def init_local_models(self):
@@ -161,25 +179,91 @@ class FederatedServer(object):
         # read the model weights as a binary file
         data = read_modelfile(self.aggregate_filename)
 
-        # encrypt the data if the cipher was selected
-        edata = self.message_encrypt(data)
+        # copy the data to a given filename in the downward path
+        # having sender_id in the path is a hack for the integration demo
 
-        self.producer.produce(KafkaTopics.FEDERATED_MODEL_TOPIC, value=edata)
-        self.producer.flush()
+        # create the directory if not already there
+        dir_path = Path(self.outgoing_path + "/" + self.SenderId)
+        if dir_path.exists() and dir_path.is_dir():
+            print("aggregate model dir found")
+        else:
+            dir_path.mkdir()
+            print("aggregate model dir created")
 
+        file_pathname = self.outgoing_path + "/" + self.SenderId + "/" + self.aggregate_filename
+
+        # delete file if already there, to generate creation event
+        # we assume the MTS will sense the create event and present to kafka
+        file_path = Path(file_pathname)
+        if file_path.exists():
+            file_path.unlink()
+
+        # write data to the above path
+        write_modelfile(file_pathname, data)
+
+    # process function for a single model received;
+    # return averaged models data if it is generated, otherwise return None
+    def process_model(self, full_filename):
+        # we get a filename naw, we nee to parse it to extract the sender id as well as copy it to our private storage
+        # we will need to rework the management to avoid copying twice the files
+        # we will need in the future to add metadata like timestamps
+
+        # TODO parsing
+        msg_filename = "change me"
+        msg_sender_id = "change me"
+
+        if len(self.local_store) < self.NUM_MSGS:
+            print("Event received", full_filename)
+            # choose a filename in the local store, copy the received file message there
+            filename = f'{self.client_model_prefix}_{len(self.local_store)}.{self.client_model_ext}'
+            # copy msg_filename to filename, binary content
+            data = read_modelfile(msg_filename)
+            write_modelfile(filename, data)
+            self.local_store.append(filename)
+            # if in test mode, received weights will be assigned to a model for testing purpose
+            if self.test_mode:
+
+                # check if the local testing model has been initialised
+                if self.rcvd_model is None:
+                    self.init_local_models()
+
+                # reload weights
+                self.rcvd_model.load_weights(filename)
+
+                # and test
+                evaluate_teaching_model(self.rcvd_model)
+
+                # print model summary
+                self.rcvd_model.summary()
+
+            # this is a duplicate, as we have the file on storage
+            # self.local_store.append(msg.value())
+            logging.info(f'Model received (possibly encrypted), length {len(data)}')
+        else:
+            logging.info(f'Average to be computed on {len(self.local_store)} models')
+
+            # reference https://machinelearningmastery.com/polyak-neural-network-model-weight-ensemble/
+            members = self.load_all_client_models(0, self.NUM_MSGS)
+            averaged = model_weight_ensemble(members)
+            if self.test_mode:
+                evaluate_teaching_model(averaged)
+                averaged.summary()
+            #  we are not using the local store indeed, clear it for the side effect of resetting the file names
+            self.local_store.clear()
+            #  return the averaged model to the caller when we produce one
+            return averaged
+
+    # TODO no longer used, remove as new method is ready
     # Processor of each single message
     def msg_process(self, msg):
         if len(self.local_store) < self.NUM_MSGS:
 
             print("Message received", msg.value())
 
-            # decrypt the message if a cypher was installed
-            msg_d_value = self.message_decrypt(msg.value())
-
             # choose a filename in the local store, dump the kafka message there
             filename = f'{self.client_model_prefix}_{len(self.local_store)}.{self.client_model_ext}'
             # write_modelfile(filename, msg.value()) # when no encryption was supported
-            write_modelfile(filename, msg_d_value)
+            write_modelfile(filename, msg.value())
             self.local_store.append(filename)
 
             # if in test mode, received weights will be assigned to a model for testing purpose
@@ -219,38 +303,44 @@ class FederatedServer(object):
             #  return the averaged model to the caller when we produce one
             return averaged
 
-    def main_loop(self, msg_timeout):
-        try:
-            self.receiver.subscribe([KafkaTopics.CLIENT_MODEL_TOPIC])
+    # TODO rewrite main loop to act on file system changes
+    # def main_loop(self, msg_timeut):
+    #    watch = FileWatchLoop(self.incoming_path, self)
+    #    return None
 
-            # TODO in case we need an initial handshake with clients it should be likely coded here, e.g.
-            # 1) gather client ip / names
-            # 2) send each client some init message to solicit first model
-
-            while self.receiver_running:
-                msg = self.receiver.poll(msg_timeout)
-
-                # print("Message received")
-
-                if msg is None:
-                    continue
-
-                if msg.error():
-                    if msg.error().code() == KafkaError._PARTITION_EOF:
-                        # End of partition event
-                        logging.error('%% %s [%d] end at offset %d\n' % (msg.topic(), msg.partition(), msg.offset()))
-                        print("There is an error")
-                    elif msg.error():
-                        raise KafkaException(msg.error())
-                else:
-                    averaged = self.msg_process(msg)
-                    if averaged:
-                        averaged.save_weights(self.aggregate_filename)
-                        self.federated_model_resend()
-
-        finally:
-            # Close down consumer to commit final offsets.
-            self.receiver.close()
+    # def oldmain_loop(self, msg_timeout):
+    #     try:
+    #         self.receiver.subscribe([KafkaTopics.CLIENT_MODEL_TOPIC])
+    #
+    #         # TODO in case we need an initial handshake with clients it should be likely coded here, e.g.
+    #         # 1) gather client ip / names
+    #         # 2) send each client some init message to solicit first model
+    #
+    #         while self.receiver_running:
+    #             msg = self.receiver.poll(msg_timeout)
+    #
+    #             # print("Message received")
+    #
+    #             if msg is None:
+    #                 continue
+    #
+    #             if msg.error():
+    #                 if msg.error().code() == KafkaError._PARTITION_EOF:
+    #                     # End of partition event
+    #                     logging.error('%% %s [%d] end at offset %d\n' % (msg.topic(), msg.partition(), msg.offset()))
+    #                     print("There is an error")
+    #                 elif msg.error():
+    #                     raise KafkaException(msg.error())
+    #             else:
+    #                 averaged = self.msg_process(msg)
+    #                 if averaged:
+    #                     averaged.save_weights(self.aggregate_filename)
+    #                     self.federated_model_resend()
+    #
+    #     finally:
+    #         # Close down consumer to commit final offsets.
+    #         self.receiver.close()
+    #
 
     def shutdown(self):
         self.receiver_running = False
@@ -259,10 +349,12 @@ class FederatedServer(object):
 def argparsing():
     parser = argparse.ArgumentParser(description='Start Federated Learning Server.')
     parser.add_argument('--version', action='version', version='%(prog)s 0.1')
-    parser.add_argument('--broker', action='store', default=KafkaConfig.FED_KAFKA_BROKER_URL,
-                        help='Address of the Kafka Broker')
-    parser.add_argument('--groupid', action='store', default=KafkaConfig.FED_KAFKA_BROKER_groupid,
-                        help='group id in the broker')
+#    parser.add_argument('--broker', action='store', default=KafkaConfig.FED_KAFKA_BROKER_URL,
+#                        help='Address of the Kafka Broker')
+#    parser.add_argument('--groupid', action='store', default=KafkaConfig.FED_KAFKA_BROKER_groupid,
+#                        help='group id in the broker')
+    parser.add_argument('--broker', action='store', default="UNUSED", help='Address of the Kafka Broker')
+    parser.add_argument('--groupid', action='store', default="UNUSED", help='group id in the broker')
     parser.add_argument('--testmode', action='store_true')
     parser.add_argument('--n-models', action='store', default=3, type=int, help='Number of models before the average')
     parser.add_argument('--avg-timeout', action='store', default=300, type=int, help='Timeout before the average')
@@ -293,16 +385,23 @@ def main():
     logging.basicConfig(filename=ARGUMENTS.logfile,
                         level=logging.INFO)
 
-    da_broker = os.environ.get('DA_BROKER')
-    da_groupid = os.environ.get('DA_GROUPID')
-    da_n_models = os.environ.get('DA_N_MODELS')
-    da_avg_timeout = os.environ.get('DA_AVG_TIMEOUT')
-    da_msg_timeout = os.environ.get('DA_MSG_TIMEOUT')
+    # TODO not urgent, change the parameters to match the container name
     da_logfile = os.environ.get('DA_LOGFILE')
     da_client_model_prefix = os.environ.get('DA_CLIENT_MODEL_PREFIX')
     da_client_model_ext = os.environ.get('DA_CLIENT_MODEL_EXT')
+    da_n_models = os.environ.get('DA_N_MODELS')
+    da_avg_timeout = os.environ.get('DA_AVG_TIMEOUT')
     da_aggr_model = os.environ.get('DA_AGGR_MODEL')
-    da_crypt_select = os.environ.get('DA_CRYPT_SELECT')
+    #
+    # these may disappear with KAFKA removal
+    da_broker = os.environ.get('DA_BROKER')
+    da_groupid = os.environ.get('DA_GROUPID')
+    da_msg_timeout = os.environ.get('DA_MSG_TIMEOUT')
+    # communication via files - paths
+    da_upward_path = os.environ.get('DA_UPWARD_PATH')
+    da_downward_path = os.environ.get('DA_DOWNWARD_PATH')
+
+    # da_crypt_select = os.environ.get('DA_CRYPT_SELECT')
 
     # fed_server = FederatedServer(testmode=ARGUMENTS.testmode,
     #                              num_msg=ARGUMENTS.n_models,
@@ -323,13 +422,17 @@ def main():
                                  client_model_prefix=da_client_model_prefix,
                                  broker_addr=da_broker,
                                  groupid=da_groupid,
-                                 cryptselect=da_crypt_select,
-                                 crypt_passwords=ARGUMENTS.crypt_aes_passwords,
-                                 crypt_salts=ARGUMENTS.crypt_aes_salts
+                                 # cryptselect=da_crypt_select,
+                                 # crypt_passwords=ARGUMENTS.crypt_aes_passwords,
+                                 # crypt_salts=ARGUMENTS.crypt_aes_salts
+                                 outgoing_path=da_downward_path
                                  )
 
     # fed_server.main_loop(msg_timeout=ARGUMENTS.msg_timeout)
-    fed_server.main_loop(msg_timeout=da_msg_timeout)
+    # fed_server.main_loop(msg_timeout=da_msg_timeout)
+
+    my_watch_begins = FileWatchLoop(da_upward_path, fed_server)
+    my_watch_begins.run()
 
 
 if __name__ == "__main__":
