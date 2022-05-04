@@ -87,7 +87,7 @@ class Handler(FileSystemEventHandler):
         #                                                     ignore_directories=True, case_sensitive=False)
 
     def on_created(self, event):
-        # TODO call federated server receive model
+        # call federated server receive model
         averaged = self.FedServer.process_model(event.src_path)
         print("Watchdog received created event - % s." % event.src_path)
         if averaged:
@@ -192,9 +192,13 @@ class FederatedServer(object):
         # we will need to rework the management to avoid copying twice the files
         # we will need in the future to add metadata like timestamps
 
-        # TODO parsing
-        msg_filename = "change me"
-        msg_sender_id = "change me"
+        full_path = Path(full_filename)
+        #  parsing
+        msg_filename =  Path.name
+        # last dir is expected to be the sender id
+        msg_sender_id = Path(full_path.parent).name
+
+        print("process_model after parsing: ", full_filename, msg_filename, msg_sender_id)
 
         if len(self.local_store) < self.NUM_MSGS:
             print("Event received", full_filename)
