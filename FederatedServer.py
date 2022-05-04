@@ -86,22 +86,6 @@ class Handler(FileSystemEventHandler):
         # watchdog.events.PatternMatchingEventHandler.__init__(self, patterns=['*.csv'],
         #                                                     ignore_directories=True, case_sensitive=False)
 
-    # TODO remove below commented method
-    # i try removing this, apparently it is not mandatory but just an optimization
-    # @staticmethod
-    # def on_any_event(event):
-    #     if event.is_directory:
-    #         return None
-    #     elif event.event_type == 'modified':
-    #         # we do not plan to receive modifications
-    #         # print("Watchdog received modified event - % s." % event.src_path)
-    #         return None
-    #     elif event.event_type == 'created':
-    #         # Event is created, you can process it now
-    #         # TODO call federated server receive model
-    #         print("Watchdog received created event - % s." % event.src_path)
-    #         self.FedServer()
-
     def on_created(self, event):
         # TODO call federated server receive model
         averaged = self.FedServer.process_model(event.src_path)
@@ -255,58 +239,53 @@ class FederatedServer(object):
 
     # TODO no longer used, remove as new method is ready
     # Processor of each single message
-    def msg_process(self, msg):
-        if len(self.local_store) < self.NUM_MSGS:
-
-            print("Message received", msg.value())
-
-            # choose a filename in the local store, dump the kafka message there
-            filename = f'{self.client_model_prefix}_{len(self.local_store)}.{self.client_model_ext}'
-            # write_modelfile(filename, msg.value()) # when no encryption was supported
-            write_modelfile(filename, msg.value())
-            self.local_store.append(filename)
-
-            # if in test mode, received weights will be assigned to a model for testing purpose
-            if self.test_mode:
-
-                # check if the local testing model has been initialised
-                if self.rcvd_model is None:
-                    self.init_local_models()
-
-                # reload weights
-                self.rcvd_model.load_weights(filename)
-
-                # and test
-                evaluate_teaching_model(self.rcvd_model)
-
-                # print model summary
-                self.rcvd_model.summary()
-
-            # this is a duplicate, as we have the file on storage
-            # self.local_store.append(msg.value())
-            logging.info(f'Model received (possibly encrypted), length {len(msg.value())}')
-
-        else:
-            logging.info(f'Average to be computed on {len(self.local_store)} models')
-
-            # reference https://machinelearningmastery.com/polyak-neural-network-model-weight-ensemble/
-            members = self.load_all_client_models(0, self.NUM_MSGS)
-            averaged = model_weight_ensemble(members)
-
-            if self.test_mode:
-                evaluate_teaching_model(averaged)
-                averaged.summary()
-
-            #  we are not using the local store indeed, clear it for the side effect of resetting the file names
-            self.local_store.clear()
-
-            #  return the averaged model to the caller when we produce one
-            return averaged
-
-    # TODO rewrite main loop to act on file system changes
-    # def main_loop(self, msg_timeut):
-    #    watch = FileWatchLoop(self.incoming_path, self)
-    #    return None
+    # def msg_process(self, msg):
+    #     if len(self.local_store) < self.NUM_MSGS:
+    #
+    #         print("Message received", msg.value())
+    #
+    #         # choose a filename in the local store, dump the kafka message there
+    #         filename = f'{self.client_model_prefix}_{len(self.local_store)}.{self.client_model_ext}'
+    #         # write_modelfile(filename, msg.value()) # when no encryption was supported
+    #         write_modelfile(filename, msg.value())
+    #         self.local_store.append(filename)
+    #
+    #         # if in test mode, received weights will be assigned to a model for testing purpose
+    #         if self.test_mode:
+    #
+    #             # check if the local testing model has been initialised
+    #             if self.rcvd_model is None:
+    #                 self.init_local_models()
+    #
+    #             # reload weights
+    #             self.rcvd_model.load_weights(filename)
+    #
+    #             # and test
+    #             evaluate_teaching_model(self.rcvd_model)
+    #
+    #             # print model summary
+    #             self.rcvd_model.summary()
+    #
+    #         # this is a duplicate, as we have the file on storage
+    #         # self.local_store.append(msg.value())
+    #         logging.info(f'Model received (possibly encrypted), length {len(msg.value())}')
+    #
+    #     else:
+    #         logging.info(f'Average to be computed on {len(self.local_store)} models')
+    #
+    #         # reference https://machinelearningmastery.com/polyak-neural-network-model-weight-ensemble/
+    #         members = self.load_all_client_models(0, self.NUM_MSGS)
+    #         averaged = model_weight_ensemble(members)
+    #
+    #         if self.test_mode:
+    #             evaluate_teaching_model(averaged)
+    #             averaged.summary()
+    #
+    #         #  we are not using the local store indeed, clear it for the side effect of resetting the file names
+    #         self.local_store.clear()
+    #
+    #         #  return the averaged model to the caller when we produce one
+    #         return averaged
 
     # def oldmain_loop(self, msg_timeout):
     #     try:
