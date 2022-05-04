@@ -105,7 +105,7 @@ class FederatedServer(object):
         self.producer = None
 
         self.local_store = []
-        self.NUM_MSGS = num_msg
+        self.NUM_MSGS = int(num_msg)
 
         self.rcvd_model = None
         self.avg_model = None

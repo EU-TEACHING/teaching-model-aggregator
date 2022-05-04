@@ -22,7 +22,11 @@ https://pulsebit.wordpress.com/2021/06/03/installing-tensorflow-on-jetson-nano/
 
 https://forums.developer.nvidia.com/t/official-tensorflow-for-jetson-nano/71770
 
-## How to launch - example
+## How to launch - local volume example
+
+`docker run --volume=/home/coppola/teaching-test/shared_storage:/shared_storage  teaching_aggregator:latest`
+
+## How to launch - Kafka example
 Example of how to run the image, overriding the DA_BROKER env variable
 
 `docker run -e "DA_BROKER=146.48.80.10" teaching_aggregator:latest`
