@@ -194,7 +194,7 @@ class FederatedServer(object):
 
         full_path = Path(full_filename)
         #  parsing
-        msg_filename =  Path.name
+        msg_filename =  full_path.name
         # last dir is expected to be the sender id
         msg_sender_id = Path(full_path.parent).name
 
