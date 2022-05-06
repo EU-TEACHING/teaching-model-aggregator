@@ -193,10 +193,12 @@ class FederatedServer(object):
         # we will need in the future to add metadata like timestamps
 
         full_path = Path(full_filename)
-        #  parsing
+        #  parsing; may be done more efficiently using Path.parts
         msg_filename =  full_path.name
         # last dir is expected to be the sender id
         msg_sender_id = Path(full_path.parent).name
+        # hack for the demo, store last seen SenderId
+        self.SenderId = msg_sender_id
 
         print("process_model after parsing: ", full_filename, msg_filename, msg_sender_id)
 
@@ -205,7 +207,7 @@ class FederatedServer(object):
             # choose a filename in the local store, copy the received file message there
             filename = f'{self.client_model_prefix}_{len(self.local_store)}.{self.client_model_ext}'
             # copy msg_filename to filename, binary content
-            data = read_modelfile(msg_filename)
+            data = read_modelfile(full_filename)
             write_modelfile(filename, data)
             self.local_store.append(filename)
             # if in test mode, received weights will be assigned to a model for testing purpose
