@@ -169,8 +169,9 @@ class FederatedServer(object):
         # create the directory if not already there
         dir_path = Path(self.outgoing_path + "/" + self.SenderId)
         if dir_path.exists() and dir_path.is_dir():
-            print("aggregate model dir found")
+            print("aggregate model dir found :",dir_path)
         else:
+            print("aggregate model dir not found :", dir_path)
             dir_path.mkdir()
             print("aggregate model dir created")
 

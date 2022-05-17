@@ -17,10 +17,12 @@ See within FederatedServer.py main function.
  - The new version (currently a repo branch) interfaces to the Model Transfer Service container via a shared storage volume and file monitoring. The MTS thus handles Kafka as well as model data encryption/decryption.
 
 ## How to build
-Assuming all the GitHub folder was downloaded or copied in **teaching-model-aggregator-master** . 
+Assuming all the GitHub folder was downloaded or copied in **teaching-model-aggregator-XXX** . 
 The following creates an image named **teaching_aggregator**
 
-`docker build -t teaching_aggregator teaching-model-aggregator-master/`
+`docker build -t teaching_aggregator teaching-model-aggregator-XXX/`
+
+When using *github clone* the source directory will be named `teaching-model-aggregator/` regardless of the git branch
 
 ## Hacking notes
 Hints about how to install tensorflow on the NVIDIA Jetson Nano
