@@ -17,11 +17,22 @@ Current implementation :
  * does not yet send the model upward
  * computes the aggregation by weight average on all model weights
 
+Integration work plan:
+ * TODO check again the MAS/MTS/BROKER/MTS interaction now that the file writing was debugged
+ * TODO redefine the communication protocol with the MTS:
+    * define kafka topic namespace
+    * add timestamps, application id to the message
+    * remove sender id directories? may be needed
+    * define file persistence/deletion rules
+ * TODO document launching the whole set of containers
+
 Future work
  * TODO split h5 model work to a separate class
  * TODO allow per-app model configuration
  * TODO allow per-app choice of aggregation function
  * TODO implement hierarchical federated aggregation (Far E./Near E./Cloud)
+ * TODO consolidate services in less containers to reduce memory footprint on edge devices (explit accordion kafka container?)
+ * TODO revise the local file handling code to reduce un-neeed model copies ( see process_model() )
 """
 
 import os
@@ -169,7 +180,8 @@ class FederatedServer(object):
         # create the directory if not already there
         dir_path = Path(self.outgoing_path + "/" + self.SenderId)
         if dir_path.exists() and dir_path.is_dir():
-            print("aggregate model dir found :",dir_path)
+            if self.test_mode:
+                print("aggregate model dir found :",dir_path)
         else:
             print("aggregate model dir not found :", dir_path)
             dir_path.mkdir()
@@ -181,9 +193,13 @@ class FederatedServer(object):
         # we assume the MTS will sense the create event and present to kafka
         file_path = Path(file_pathname)
         if file_path.exists():
+            if self.test_mode:
+                print("DEBUG info removing previous aggregate model", file_pathname)
             file_path.unlink()
 
         # write data to the above path
+        if self.test_mode:
+            print("DEBUG INFO - write_modelfile for aggregated model called with filename", file_pathname)
         write_modelfile(file_pathname, data)
 
     # process function for a single model received;
