@@ -87,7 +87,6 @@ def model_weight_ensemble(members):
     compile_teaching_model(model)
     return model
 
-
 # you need to explicitly add a path prefix to the filename to manage a separate save directory
 def write_modelfile(filename, data):
     print("DEBUG INFO - write_modelfile called with filename", filename)
