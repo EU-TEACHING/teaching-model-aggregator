@@ -24,7 +24,7 @@ Integration work plan:
     * add timestamps, application id to the message
     * remove sender id directories? may be needed
     * define file persistence/deletion rules
- * TODO document launching the whole set of containers
+ * TODO document launching the whole set of containers (including shared storage proper setup with group id)
 
 Future work
  * TODO split h5 model work to a separate class
