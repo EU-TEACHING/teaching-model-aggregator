@@ -8,21 +8,22 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
 # Set parameters for the aggregation server
-ENV DA_BROKER="127.0.0.1"
+# CLEANUP ENV DA_BROKER="127.0.0.1"
 ENV DA_GROUPID="TEACHING"
 ENV DA_N_MODELS=3
 ENV DA_AVG_TIMEOUT=300
 ENV DA_MSG_TIMEOUT=3
 ENV DA_LOGFILE="FederatedServer.log"
+# file based interaction config #########################################
 ENV DA_CLIENT_MODEL_PREFIX="client_model"
 ENV DA_CLIENT_MODEL_EXT="h5"
 ENV DA_AGGR_MODEL="aggregate_model_tmp.h5"
 # crypto disabled now
-ENV DA_CRYPT_SELECT="plaintext"
-
+# CLEANUP ENV DA_CRYPT_SELECT="plaintext"
+#
 ENV DA_UPWARD_PATH="/shared_storage/uploads"
 ENV DA_DOWNWARD_PATH="/shared_storage/downloads"
-
+#
 VOLUME "/shared_storage"
 
 # Install pip requirements

@@ -11,11 +11,13 @@ are aggregated and sent away (there is no query-reply behaviour).
 Current implementation :
  * uses tensorflow and keras to process H5 model
  * assumes a fixed, known model, only the weights are sent from the Edge
- * imports Kafka topic and broker config from the teaching_comm.py
+ * DEPRECATED imports Kafka topic and broker config from the teaching_comm.py
+ * monitors an assigned directory and reads in any newly created file as a model
  * aggregates after receiving a prefixed number of models
  * recomputes and validates the model often to ease debug
  * does not yet send the model upward
  * computes the aggregation by weight average on all model weights
+ * stores the aggregate model in a designated storage directory for propagation
 
 Integration work plan:
  * TODO check again the MAS/MTS/BROKER/MTS interaction now that the file writing was debugged
