@@ -1,0 +1,14 @@
+version: '3'
+
+services:
+
+  teaching-model-aggregator:
+    image: teaching-model-aggregator
+    container_name: teaching-model-aggregator-edge
+    volumes:
+      - "${FILE_UPLOADS_HOST_PATH}:${FILE_UPLOADS_CONTAINER_PATH}"
+      - "${FILE_DOWNLOADS_HOST_PATH}:${FILE_DOWNLOADS_CONTAINER_PATH}"
+    environment:
+      - DA_UPWARD_PATH=${FILE_UPLOADS_CONTAINER_PATH}
+      - DA_DOWNWARD_PATH=${FILE_DOWNLOADS_CONTAINER_PATH}
+

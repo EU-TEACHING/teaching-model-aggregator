@@ -9,7 +9,7 @@ ENV PYTHONUNBUFFERED=1
 
 # Set parameters for the aggregation server
 # CLEANUP ENV DA_BROKER="127.0.0.1"
-ENV DA_GROUPID="TEACHING"
+# ENV DA_GROUPID="TEACHING"
 ENV DA_N_MODELS=3
 ENV DA_AVG_TIMEOUT=300
 ENV DA_MSG_TIMEOUT=3
@@ -24,7 +24,7 @@ ENV DA_AGGR_MODEL="aggregate_model_tmp.h5"
 ENV DA_UPWARD_PATH="/shared_storage/uploads"
 ENV DA_DOWNWARD_PATH="/shared_storage/downloads"
 #
-VOLUME "/shared_storage"
+# VOLUME "/shared_storage"
 
 # Install pip requirements
 COPY requirements.txt .
