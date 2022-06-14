@@ -44,8 +44,6 @@ import logging
 # import socket
 import argparse
 
-# from confluent_kafka import Consumer, Producer
-# from confluent_kafka import KafkaError, KafkaException
 from tensorflow import keras
 
 # from teaching_comm import KafkaTopics, KafkaConfig, create_teaching_model_structure, compile_teaching_model, \
@@ -135,15 +133,18 @@ class FederatedServer(object):
         # hack for the second integration demo, it will contain the last seen Sender ID, used in asnwering back
         self.SenderId = "X"
 
-        # self.init_communication(broker_addr, groupid)
-        self.init_local_models()
+        # NOTE: for third integration meeting, default model is now empty
+        # self.init_local_models()
+        self.rcvd_model = None
 
         # self.incoming_path = incomingpath
         self.outgoing_path = outgoing_path
 
     # method to compute models that we will use to send around or as a reference when loading weights
+    # UNUSED: no longer called, we use the first received model instead -- the calling code in within if False
     def init_local_models(self):
 
+        print("WARNING init_local_models: this function to only be called while testing")
         # Eventually the model shall be a parameter of the aggregator (e.g. a saved full model)
         self.rcvd_model = create_teaching_model_structure()
         compile_teaching_model(self.rcvd_model)
@@ -151,13 +152,15 @@ class FederatedServer(object):
         # create a new model with the same structure
         self.model_common = keras.models.clone_model(self.rcvd_model)
 
-    # load all models from files referenced in the local storage (local dir)
+    # load in memory all models from files referenced in the local storage (local dir), return a list of models
     def load_all_client_models(self, n_start, n_end):
         all_client_models = list()
 
         for epoch in range(n_start, n_end):
             # define filename for this ensemble
             filename = self.client_model_prefix + "_" + str(epoch) + "." + self.client_model_ext
+
+            # we may just read the whole model, but this may change again in later revisions
 
             # load model from file
             model = keras.models.clone_model(self.model_common)
@@ -170,7 +173,9 @@ class FederatedServer(object):
 
         return all_client_models
 
-    # propagate a processed/aggregate model. Now only back to clients, later on we will push it to the Cloud
+    # propagate a processed/aggregate model from a file, to the "communication" storage.
+    # copies form file to file
+    ############## Now we only push only back to clients; we may push it up to the Cloud
     def federated_model_resend(self):
 
         # read the model weights as a binary file
@@ -192,14 +197,14 @@ class FederatedServer(object):
         file_pathname = self.outgoing_path + "/" + self.SenderId + "/" + self.aggregate_filename
 
         # delete file if already there, to generate creation event
-        # we assume the MTS will sense the create event and present to kafka
+        # the MTS will sense the create event and present the content to kafka
         file_path = Path(file_pathname)
         if file_path.exists():
             if self.test_mode:
                 print("DEBUG info removing previous aggregate model", file_pathname)
             file_path.unlink()
 
-        # write data to the above path
+        # write data as binary content to the above path
         if self.test_mode:
             print("DEBUG INFO - write_modelfile for aggregated model called with filename", file_pathname)
         write_modelfile(file_pathname, data)
@@ -209,7 +214,7 @@ class FederatedServer(object):
     def process_model(self, full_filename):
         # we get a filename naw, we nee to parse it to extract the sender id as well as copy it to our private storage
         # we will need to rework the management to avoid copying twice the files
-        # we will need in the future to add metadata like timestamps
+        # we will need in the future to add more metadata, like timestamps
 
         full_path = Path(full_filename)
         #  parsing; may be done more efficiently using Path.parts
@@ -229,24 +234,30 @@ class FederatedServer(object):
             data = read_modelfile(full_filename)
             write_modelfile(filename, data)
             self.local_store.append(filename)
+
             # if in test mode, received weights will be assigned to a model for testing purpose
-            if self.test_mode:
+            # DISABLED CODE : we now receive the first model and use it as a reference
+            if False:
+                if self.test_mode:
 
-                # check if the local testing model has been initialised
-                if self.rcvd_model is None:
-                    self.init_local_models()
+                    # check if the local testing model has been initialised
+                    if self.rcvd_model is None:
+                        self.init_local_models()
 
-                # reload weights
-                self.rcvd_model.load_weights(filename)
+                    # reload weights
+                    self.rcvd_model.load_weights(filename)
 
-                # and test
-                evaluate_teaching_model(self.rcvd_model)
+                    # and test
+                    evaluate_teaching_model(self.rcvd_model)
 
-                # print model summary
-                self.rcvd_model.summary()
+                    # print model summary
+                    self.rcvd_model.summary()
 
-            # this is a duplicate, as we have the file on storage
-            # self.local_store.append(msg.value())
+            if self.rcvd_model is None:
+                self.rcvd_model=keras.models.load_model(filename)
+
+            # do nothing: the model remains in the storage volume and will be evaluated later on
+
             logging.info(f'Model received (possibly encrypted), length {len(data)}')
         else:
             logging.info(f'Average to be computed on {len(self.local_store)} models')
@@ -254,97 +265,16 @@ class FederatedServer(object):
             # reference https://machinelearningmastery.com/polyak-neural-network-model-weight-ensemble/
             members = self.load_all_client_models(0, self.NUM_MSGS)
             averaged = model_weight_ensemble(members)
-            if self.test_mode:
-                evaluate_teaching_model(averaged)
-                averaged.summary()
+            # self test disabled, as we are model generic now
+            #if self.test_mode:
+            #    evaluate_teaching_model(averaged)
+            #    averaged.summary()
+
             #  we are not using the local store indeed, clear it for the side effect of resetting the file names
             self.local_store.clear()
             #  return the averaged model to the caller when we produce one
             return averaged
 
-    # TODO no longer used, remove as new method is ready
-    # Processor of each single message
-    # def msg_process(self, msg):
-    #     if len(self.local_store) < self.NUM_MSGS:
-    #
-    #         print("Message received", msg.value())
-    #
-    #         # choose a filename in the local store, dump the kafka message there
-    #         filename = f'{self.client_model_prefix}_{len(self.local_store)}.{self.client_model_ext}'
-    #         # write_modelfile(filename, msg.value()) # when no encryption was supported
-    #         write_modelfile(filename, msg.value())
-    #         self.local_store.append(filename)
-    #
-    #         # if in test mode, received weights will be assigned to a model for testing purpose
-    #         if self.test_mode:
-    #
-    #             # check if the local testing model has been initialised
-    #             if self.rcvd_model is None:
-    #                 self.init_local_models()
-    #
-    #             # reload weights
-    #             self.rcvd_model.load_weights(filename)
-    #
-    #             # and test
-    #             evaluate_teaching_model(self.rcvd_model)
-    #
-    #             # print model summary
-    #             self.rcvd_model.summary()
-    #
-    #         # this is a duplicate, as we have the file on storage
-    #         # self.local_store.append(msg.value())
-    #         logging.info(f'Model received (possibly encrypted), length {len(msg.value())}')
-    #
-    #     else:
-    #         logging.info(f'Average to be computed on {len(self.local_store)} models')
-    #
-    #         # reference https://machinelearningmastery.com/polyak-neural-network-model-weight-ensemble/
-    #         members = self.load_all_client_models(0, self.NUM_MSGS)
-    #         averaged = model_weight_ensemble(members)
-    #
-    #         if self.test_mode:
-    #             evaluate_teaching_model(averaged)
-    #             averaged.summary()
-    #
-    #         #  we are not using the local store indeed, clear it for the side effect of resetting the file names
-    #         self.local_store.clear()
-    #
-    #         #  return the averaged model to the caller when we produce one
-    #         return averaged
-
-    # def oldmain_loop(self, msg_timeout):
-    #     try:
-    #         self.receiver.subscribe([KafkaTopics.CLIENT_MODEL_TOPIC])
-    #
-    #         # TODO in case we need an initial handshake with clients it should be likely coded here, e.g.
-    #         # 1) gather client ip / names
-    #         # 2) send each client some init message to solicit first model
-    #
-    #         while self.receiver_running:
-    #             msg = self.receiver.poll(msg_timeout)
-    #
-    #             # print("Message received")
-    #
-    #             if msg is None:
-    #                 continue
-    #
-    #             if msg.error():
-    #                 if msg.error().code() == KafkaError._PARTITION_EOF:
-    #                     # End of partition event
-    #                     logging.error('%% %s [%d] end at offset %d\n' % (msg.topic(), msg.partition(), msg.offset()))
-    #                     print("There is an error")
-    #                 elif msg.error():
-    #                     raise KafkaException(msg.error())
-    #             else:
-    #                 averaged = self.msg_process(msg)
-    #                 if averaged:
-    #                     averaged.save_weights(self.aggregate_filename)
-    #                     self.federated_model_resend()
-    #
-    #     finally:
-    #         # Close down consumer to commit final offsets.
-    #         self.receiver.close()
-    #
 
     def shutdown(self):
         self.receiver_running = False

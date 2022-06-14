@@ -21,6 +21,7 @@ import logging
 # import socket
 import argparse
 
+import tensorflow
 from tensorflow import keras
 
 # from teaching_comm import KafkaTopics, KafkaConfig, create_teaching_model_structure, compile_teaching_model, \
@@ -29,23 +30,31 @@ from tensorflow import keras
 from teaching_comm import create_teaching_model_structure, compile_teaching_model, \
     evaluate_teaching_model, write_modelfile, read_modelfile, model_weight_ensemble
 
-# manage watching files...
 import time
+# manage watching files; not yet used in testingclient
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
 
 
-def clientloop(msg_timeout, outwardpath, senderID):
+def clientloop(msg_timeout, upwardpath, senderID, model_filename, model_ext):
 
+    print('called testing_client client_loop(', msg_timeout,',', upwardpath, ',', senderID, ',', model_filename, ',', model_ext, ')')
     #create and compile a model using teaching_comm methods
     local_model=create_teaching_model_structure()
     compile_teaching_model(local_model)
+    print('testingclient main loop init, evaluating generated model')
+    evaluate_teaching_model(local_model)
+    local_model.summary()
+    count=0
 
     try:
         while True:
-            dir_path = Path(outwardpath + "/" + SenderId)
-            #write model
+            dir_path = Path(upwardpath + "/" +senderID + "/" + model_filename + str(count)+'.'+model_ext)
+            # write full model using Keras
+            local_model.save(dir_path, save_format='h5')
+            print('clientloop model saved')
+            count+=1
             time.sleep(msg_timeout)
     finally:
         print("exception in main testingclient loop, exiting")
@@ -89,27 +98,31 @@ def main():
 
     da_logfile = os.environ.get('DA_LOGFILE')
     da_client_model_prefix = os.environ.get('DA_CLIENT_MODEL_PREFIX')
+    if da_client_model_prefix == None:
+        da_client_model_prefix = ARGUMENTS.client_model_prefix
     da_client_model_ext = os.environ.get('DA_CLIENT_MODEL_EXT')
+    if da_client_model_ext == None:
+        da_client_model_ext = ARGUMENTS.client_model_ext
     da_n_models = os.environ.get('DA_N_MODELS')
     da_avg_timeout = os.environ.get('DA_AVG_TIMEOUT')
     da_aggr_model = os.environ.get('DA_AGGR_MODEL')
 
-#    da_broker = os.environ.get('DA_BROKER')
-#    da_groupid = os.environ.get('DA_GROUPID')
     da_msg_timeout = os.environ.get('DA_MSG_TIMEOUT')
     if da_msg_timeout == None:
         da_msg_timeout = 3.0
+
     # communication via files - paths
+    #
     da_upward_path = os.environ.get('DA_UPWARD_PATH')
     if da_upward_path == None:
         da_upward_path = ARGUMENTS.upwarddir
+    #
     da_downward_path = os.environ.get('DA_DOWNWARD_PATH')
     if da_downward_path == None:
-        da_downward_path = ARGUMENTS.upwarddir
+        da_downward_path = ARGUMENTS.downwarddir
 
-    senderID="testClient"
-    clientloop(da_msg_timeout, da_upward_path, senderID)
-
+    senderID="XXX"
+    clientloop(da_msg_timeout, da_upward_path, senderID, da_client_model_prefix, da_client_model_ext)
 
 if __name__ == "__main__":
     main()

@@ -37,7 +37,7 @@ def compile_teaching_model(model):
         metrics=[tf.keras.metrics.SparseCategoricalAccuracy()],
     )
 
-
+# this is only to be used in internal testing as of integration meeting 3
 def evaluate_teaching_model(model, ds_test=None):
     if ds_test is None:
         (ds_train, ds_test), ds_info = tfds.load(
