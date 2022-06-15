@@ -106,20 +106,31 @@ class Handler(FileSystemEventHandler):
             self.FedServer.federated_model_resend()
 
 
+def checkNone(vname, vvalue):
+    if vvalue is not None and  str(vvalue) != '' :
+        return
+    else:
+        print ('Error: missing value for parameter ',vname, ' : ', vvalue)
+        exit(-100)
+
 class FederatedServer(object):
 
-    def __init__(self, num_msg, testmode, aggrfilename, client_model_prefix, client_model_ext,
-                 broker_addr, groupid, outgoing_path):
+    def __init__(self, num_msg, testmode, aggrfilename, client_model_prefix, client_model_ext, outgoing_path):
+
         # no incoming_path as it is handled by the FileWatchLoop class
-        # , cryptselect, crypt_passwords, crypt_salts):
         self.receiver = None
         self.producer = None
 
         self.local_store = []
         self.NUM_MSGS = int(num_msg)
 
+        # UNUSED - related code is disabled
         self.rcvd_model = None
+
         self.avg_model = None
+
+        # NOTE: for third integration meeting, default model stays empty until first message is received
+        # self.init_local_models() is not called
         self.model_common = None
 
         self.ds_test = None
@@ -132,10 +143,6 @@ class FederatedServer(object):
 
         # hack for the second integration demo, it will contain the last seen Sender ID, used in asnwering back
         self.SenderId = "X"
-
-        # NOTE: for third integration meeting, default model is now empty
-        # self.init_local_models()
-        self.rcvd_model = None
 
         # self.incoming_path = incomingpath
         self.outgoing_path = outgoing_path
@@ -253,8 +260,8 @@ class FederatedServer(object):
                     # print model summary
                     self.rcvd_model.summary()
 
-            if self.rcvd_model is None:
-                self.rcvd_model=keras.models.load_model(filename)
+            if self.model_common is None:
+                self.model_common=keras.models.load_model(filename)
 
             # do nothing: the model remains in the storage volume and will be evaluated later on
 
@@ -349,16 +356,20 @@ def main():
     #                              crypt_salts=ARGUMENTS.crypt_aes_salts
     # )
 
+    # sanity check to help detect container env misconfig
+    checkNone('da_n_models', da_n_models)
+    checkNone('da_aggr_model', da_aggr_model)
+    checkNone('da_client_model_ext', da_client_model_ext)
+    checkNone('da_client_model_prefix', da_client_model_prefix)
+    checkNone('da_downward_path', da_downward_path)
+    #
+    checkNone('da_upward_path', da_upward_path)
+
     fed_server = FederatedServer(testmode=ARGUMENTS.testmode,
                                  num_msg=da_n_models,
                                  aggrfilename=da_aggr_model,
                                  client_model_ext=da_client_model_ext,
                                  client_model_prefix=da_client_model_prefix,
-                                 broker_addr=da_broker,
-                                 groupid=da_groupid,
-                                 # cryptselect=da_crypt_select,
-                                 # crypt_passwords=ARGUMENTS.crypt_aes_passwords,
-                                 # crypt_salts=ARGUMENTS.crypt_aes_salts
                                  outgoing_path=da_downward_path
                                  )
 
